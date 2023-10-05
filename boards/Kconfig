@@ -1655,6 +1655,15 @@ config ARCH_BOARD_NUCLEO_G071RB
 		This is a minimal configuration that supports low-level test of the
 		Nucleo G071RB in the NuttX source tree.
 
+config ARCH_BOARD_NUCLEO_H563ZI
+	bool "STM32H563 Nucleo H563ZI"
+	depends on ARCH_CHIP_STM32H563ZI
+	select ARCH_HAVE_LEDS
+	select ARCH_HAVE_BUTTONS
+# TODO:	select ARCH_HAVE_IRQBUTTONS
+	---help---
+		STMicro Nucleo H563ZI board based on the STMicro STM32H563ZI MCU.
+
 config ARCH_BOARD_NUCLEO_H743ZI
 	bool "STM32H743 Nucleo H743ZI"
 	depends on ARCH_CHIP_STM32H743ZI
@@ -3134,6 +3143,7 @@ config ARCH_BOARD
 	default "stm32g071b-disco"          if ARCH_BOARD_STM32G071B_DISCO
 	default "nucleo-g070rb"             if ARCH_BOARD_NUCLEO_G070RB
 	default "nucleo-g071rb"             if ARCH_BOARD_NUCLEO_G071RB
+	default "nucleo-h563zi"             if ARCH_BOARD_NUCLEO_H563ZI
 	default "nucleo-h743zi"             if ARCH_BOARD_NUCLEO_H743ZI
 	default "nucleo-h743zi2"            if ARCH_BOARD_NUCLEO_H743ZI2
 	default "nucleo-h745zi"             if ARCH_BOARD_NUCLEO_H745ZI
