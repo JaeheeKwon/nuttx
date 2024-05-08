@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/nrf52/nrf52832-sparkfun/src/nrf52_autoleds.c
+ * boards/arm/nrf52/microbit_v2_21/src/nrf52_autoleds.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -42,7 +42,7 @@
 
 #include "chip.h"
 #include "arm_internal.h"
-#include "nrf52832-sparkfun.h"
+#include "microbit_v2_21.h"
 
 #ifdef CONFIG_ARCH_LEDS
 
