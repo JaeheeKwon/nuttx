@@ -1799,6 +1799,14 @@ config ARCH_BOARD_LINUM_STM32H753BI
 	---help---
 		The Linum board is based on the STMicro STM32H753BI MCU.
 
+config ARCH_BOARD_NUCLEO_H753ZI
+	bool "STM32H753 Nucleo STM32H753ZI"
+	depends on ARCH_CHIP_STM32H753ZI
+	select ARCH_HAVE_LEDS
+	select ARCH_HAVE_BUTTONS
+	---help---
+		STMicro Nucleo STM753ZI board based on the STMicro STM32H753ZI MCU.
+
 config ARCH_BOARD_OPENH743I
 	bool "Waveshare OpenH743I board"
 	depends on ARCH_CHIP_STM32H743II
@@ -3381,6 +3389,7 @@ config ARCH_BOARD
 	default "nucleo-h745zi"             if ARCH_BOARD_NUCLEO_H745ZI
 	default "stm32h745i-disco"          if ARCH_BOARD_STM32H745I_DISCO
 	default "linum-stm32h753bi"         if ARCH_BOARD_LINUM_STM32H753BI
+	default "nucleo-h753zi"             if ARCH_BOARD_NUCLEO_H753ZI
 	default "openh743i"                 if ARCH_BOARD_OPENH743I
 	default "nucleo-l073rz"             if ARCH_BOARD_NUCLEO_L073RZ
 	default "nucleo-l152re"             if ARCH_BOARD_NUCLEO_L152RE
