@@ -65,6 +65,9 @@
 
 #include "stm32_gpio.h"
 
+extern uint32_t board_userled_initialize(void);
+extern void board_userled_all(uint32_t ledset);
+
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
@@ -154,6 +157,13 @@ int stm32_bringup(void)
 #endif
 
   UNUSED(ret);
+
+#if defined(CONFIG_USERLED) && !defined(CONFIG_ARCH_LEDS)
+  /* Enable USER LED support for some other purpose */
+  board_userled_initialize();
+
+  board_userled_all(0x00);
+#endif /* CONFIG_USERLED && !CONFIG_ARCH_LEDS */
 
 #if defined(CONFIG_I2C) && defined(CONFIG_SYSTEM_I2CTOOL)
   stm32_i2ctool();
