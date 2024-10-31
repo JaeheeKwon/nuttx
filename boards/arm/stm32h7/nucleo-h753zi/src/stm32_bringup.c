@@ -28,16 +28,22 @@
 #include <syslog.h>
 #include <errno.h>
 
-#include <nuttx/fs/fs.h>
-#include <nuttx/kmalloc.h>
+#include <arch/board/board.h>
 
-#include "stm32_gpio.h"
-#include "stm32_i2c.h"
+#include <nuttx/fs/fs.h>
+
+#ifdef CONFIG_USBMONITOR
+#  include <nuttx/usb/usbmonitor.h>
+#endif
+
+#ifdef CONFIG_STM32H7_OTGFS
+#  include "stm32_usbhost.h"
+#endif
 
 #include "nucleo-h753zi.h"
 
-#ifdef CONFIG_USERLED
-#include <nuttx/leds/userled.h>
+#ifdef CONFIG_INPUT_BUTTONS
+#  include <nuttx/input/buttons.h>
 #endif
 
 #ifdef HAVE_RTC_DRIVER
@@ -45,15 +51,19 @@
 #  include "stm32_rtc.h"
 #endif
 
-#ifdef CONFIG_STM32H7_FDCAN
-#include "stm32_fdcan_sock.h"
+#ifdef CONFIG_STM32_ROMFS
+#  include "stm32_romfs.h"
+#endif
+
+#ifdef CONFIG_STM32H7_IWDG
+#  include "stm32_wdg.h"
 #endif
 
 #ifdef CONFIG_RNDIS
-#include <nuttx/usb/rndis.h>
+#  include <nuttx/usb/rndis.h>
 #endif
 
-#include <arch/board/board.h>
+#include "stm32_gpio.h"
 
 /****************************************************************************
  * Private Functions
@@ -102,6 +112,12 @@ static void stm32_i2c_register(int bus)
 #if defined(CONFIG_I2C) && defined(CONFIG_SYSTEM_I2CTOOL)
 static void stm32_i2ctool(void)
 {
+#ifdef CONFIG_STM32H7_I2C1
+  stm32_i2c_register(1);
+#endif
+#ifdef CONFIG_STM32H7_I2C2
+  stm32_i2c_register(2);
+#endif
 #ifdef CONFIG_STM32H7_I2C3
   stm32_i2c_register(3);
 #endif
@@ -132,27 +148,21 @@ static void stm32_i2ctool(void)
 
 int stm32_bringup(void)
 {
-  int ret;
-
-  UNUSED(ret);
-
+  int ret = OK;
 #ifdef HAVE_RTC_DRIVER
   struct rtc_lowerhalf_s *lower;
 #endif
 
-#ifdef CONFIG_STM32H7_RMII
-  /* Reset Ethernet PHY */
+  UNUSED(ret);
 
-  stm32_configgpio(GPIO_ETH_RESET);
-  stm32_gpiowrite(GPIO_ETH_RESET, 0);
-  usleep(50000);
-  stm32_gpiowrite(GPIO_ETH_RESET, 1);
+#if defined(CONFIG_I2C) && defined(CONFIG_SYSTEM_I2CTOOL)
+  stm32_i2ctool();
 #endif
 
 #ifdef CONFIG_FS_PROCFS
   /* Mount the procfs file system */
 
-  ret = nx_mount(NULL, "/proc", "procfs", 0, NULL);
+  ret = nx_mount(NULL, STM32_PROCFS_MOUNTPOINT, "procfs", 0, NULL);
   if (ret < 0)
     {
       syslog(LOG_ERR,
@@ -160,14 +170,14 @@ int stm32_bringup(void)
     }
 #endif /* CONFIG_FS_PROCFS */
 
+#ifdef CONFIG_STM32_ROMFS
+  /* Mount the romfs partition */
 
-#ifdef CONFIG_USERLED
-  /* Register the LED driver */
-
-  ret = userled_lower_initialize("/dev/userleds");
+  ret = stm32_romfs_initialize();
   if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: userled_lower_initialize() failed: %d\n", ret);
+      syslog(LOG_ERR, "ERROR: Failed to mount romfs at %s: %d\n",
+             CONFIG_STM32_ROMFS_MOUNTPOINT, ret);
     }
 #endif
 
@@ -197,34 +207,142 @@ int stm32_bringup(void)
     }
 #endif
 
-#if defined(CONFIG_FAT_DMAMEMORY)
-  if (stm32_dma_alloc_init() < 0)
-    {
-      syslog(LOG_ERR, "DMA alloc FAILED");
-    }
-#endif
+#ifdef CONFIG_INPUT_BUTTONS
+  /* Register the BUTTON driver */
 
-#ifdef HAVE_SDIO
-  /* Initialize the SDIO block driver */
-
-  ret = stm32_sdio_initialize();
+  ret = btn_lower_initialize("/dev/buttons");
   if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: btn_lower_initialize() failed: %d\n", ret);
+    }
+#endif /* CONFIG_INPUT_BUTTONS */
+
+#ifdef HAVE_USBHOST
+  /* Initialize USB host operation.  stm32_usbhost_initialize()
+   * starts a thread will monitor for USB connection and
+   * disconnection events.
+   */
+
+  ret = stm32_usbhost_initialize();
+  if (ret != OK)
     {
       syslog(LOG_ERR,
-             "ERROR: Failed to initialize MMC/SD driver: %d\n", ret);
+             "ERROR: Failed to initialize USB host: %d\n",
+             ret);
     }
 #endif
 
-#if defined(CONFIG_I2C) && defined(CONFIG_SYSTEM_I2CTOOL)
-  stm32_i2ctool();
+#ifdef HAVE_USBMONITOR
+  /* Start the USB Monitor */
+
+  ret = usbmonitor_start();
+  if (ret != OK)
+    {
+      syslog(LOG_ERR,
+             "ERROR: Failed to start USB monitor: %d\n",
+             ret);
+    }
 #endif
 
-#ifdef CONFIG_I2C_EE_24XX
-  ret = stm32_at24_init("/dev/eeprom");
+#ifdef CONFIG_ADC
+  /* Initialize ADC and register the ADC driver. */
+
+  ret = stm32_adc_setup();
   if (ret < 0)
     {
-      syslog(LOG_ERR, "Failed to initialize EEPROM HX24LCXXB: %d\n", ret);
+      syslog(LOG_ERR, "ERROR: stm32_adc_setup failed: %d\n", ret);
+    }
+#endif /* CONFIG_ADC */
+
+#ifdef CONFIG_DEV_GPIO
+  /* Register the GPIO driver */
+
+  ret = stm32_gpio_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "Failed to initialize GPIO Driver: %d\n", ret);
       return ret;
+    }
+#endif
+
+#ifdef CONFIG_SENSORS_LSM6DSL
+  ret = stm32_lsm6dsl_initialize("/dev/lsm6dsl0");
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to initialize LSM6DSL driver: %d\n",
+             ret);
+    }
+#endif /* CONFIG_SENSORS_LSM6DSL */
+
+#ifdef CONFIG_SENSORS_LSM9DS1
+  ret = stm32_lsm9ds1_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to initialize LSM9DS1 driver: %d\n",
+             ret);
+    }
+#endif /* CONFIG_SENSORS_LSM6DSL */
+
+#ifdef CONFIG_SENSORS_LSM303AGR
+  ret = stm32_lsm303agr_initialize("/dev/lsm303mag0");
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to initialize LSM303AGR driver: %d\n",
+             ret);
+    }
+#endif /* CONFIG_SENSORS_LSM303AGR */
+
+#ifdef CONFIG_PCA9635PW
+  /* Initialize the PCA9635 chip */
+
+  ret = stm32_pca9635_initialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: stm32_pca9635_initialize failed: %d\n", ret);
+    }
+#endif
+
+#ifdef CONFIG_WL_NRF24L01
+  ret = stm32_wlinitialize();
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: Failed to initialize wireless driver: %d\n",
+             ret);
+    }
+#endif /* CONFIG_WL_NRF24L01 */
+
+#if defined(CONFIG_CDCACM) && !defined(CONFIG_CDCACM_CONSOLE) && \
+    !defined(CONFIG_CDCACM_COMPOSITE)
+  /* Initialize CDCACM */
+
+  syslog(LOG_INFO, "Initialize CDCACM device\n");
+
+  ret = cdcacm_initialize(0, NULL);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "ERROR: cdcacm_initialize failed: %d\n", ret);
+    }
+#endif /* CONFIG_CDCACM & !CONFIG_CDCACM_CONSOLE */
+
+#if defined(CONFIG_RNDIS) && !defined(CONFIG_RNDIS_COMPOSITE)
+  uint8_t mac[6];
+  mac[0] = 0xa0; /* TODO */
+  mac[1] = (CONFIG_NETINIT_MACADDR_2 >> (8 * 0)) & 0xff;
+  mac[2] = (CONFIG_NETINIT_MACADDR_1 >> (8 * 3)) & 0xff;
+  mac[3] = (CONFIG_NETINIT_MACADDR_1 >> (8 * 2)) & 0xff;
+  mac[4] = (CONFIG_NETINIT_MACADDR_1 >> (8 * 1)) & 0xff;
+  mac[5] = (CONFIG_NETINIT_MACADDR_1 >> (8 * 0)) & 0xff;
+  usbdev_rndis_initialize(mac);
+#endif
+
+#ifdef CONFIG_MMCSD_SPI
+  /* Initialize the MMC/SD SPI driver (SPI3 is used) */
+
+  ret = stm32_mmcsd_initialize(CONFIG_NSH_MMCSDMINOR);
+  if (ret < 0)
+    {
+      syslog(LOG_ERR, "Failed to initialize SD slot %d: %d\n",
+             CONFIG_NSH_MMCSDMINOR, ret);
     }
 #endif
 
@@ -238,56 +356,20 @@ int stm32_bringup(void)
     }
 #endif
 
-#ifdef CONFIG_NETDEV_LATEINIT
-
-#  ifdef CONFIG_STM32H7_FDCAN1
-  stm32_fdcansockinitialize(0);
-#  endif
-
-#  ifdef CONFIG_STM32H7_FDCAN2
-  stm32_fdcansockinitialize(1);
-#  endif
-
-#endif
-
-#ifdef CONFIG_MTD_W25QXXXJV
-  ret = stm32_w25qxxx_setup();
+#ifdef CONFIG_MTD
+#ifdef HAVE_PROGMEM_CHARDEV
+  ret = stm32_progmem_init();
   if (ret < 0)
     {
-      syslog(LOG_ERR, "ERROR: stm32_n25qxxx_setup failed: %d\n", ret);
+      syslog(LOG_ERR, "ERROR: Failed to initialize MTD progmem: %d\n", ret);
     }
-#endif
+#endif /* HAVE_PROGMEM_CHARDEV */
+#endif /* CONFIG_MTD */
 
-#if defined(CONFIG_RNDIS) && !defined(CONFIG_RNDIS_COMPOSITE)
-  uint8_t mac[6];
-  mac[0] = 0xa0;
-  mac[1] = (CONFIG_NETINIT_MACADDR_2 >> (8 * 0)) & 0xff;
-  mac[2] = (CONFIG_NETINIT_MACADDR_1 >> (8 * 3)) & 0xff;
-  mac[3] = (CONFIG_NETINIT_MACADDR_1 >> (8 * 2)) & 0xff;
-  mac[4] = (CONFIG_NETINIT_MACADDR_1 >> (8 * 1)) & 0xff;
-  mac[5] = (CONFIG_NETINIT_MACADDR_1 >> (8 * 0)) & 0xff;
-  usbdev_rndis_initialize(mac);
-#endif
+#ifdef CONFIG_STM32H7_IWDG
+  /* Initialize the watchdog timer */
 
-#if defined(CONFIG_SENSORS_QENCODER)
-  /* Initialize and register the qencoder driver */
-
-  ret = board_qencoder_initialize(0, NUCLEOSTM32H753ZI_QETIMER);
-  if (ret != OK)
-    {
-      syslog(LOG_ERR,
-             "ERROR: Failed to register the qencoder: %d\n",
-             ret);
-      return ret;
-    }
-#endif
-
-#ifdef CONFIG_CL_MFRC522
-  ret = stm32_mfrc522initialize("/dev/rfid0");
-  if (ret < 0)
-    {
-      syslog(LOG_ERR, "ERROR: stm32_mfrc522initialize() failed: %d\n", ret);
-    }
+  stm32_iwdginitialize("/dev/watchdog0", STM32_LSI_FREQUENCY);
 #endif
 
   return OK;

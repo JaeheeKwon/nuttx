@@ -27,6 +27,8 @@
 #include <stdbool.h>
 #include <debug.h>
 
+#include <sys/param.h>
+
 #include <nuttx/board.h>
 #include <arch/board/board.h>
 
@@ -36,12 +38,6 @@
 #ifdef CONFIG_ARCH_LEDS
 
 /****************************************************************************
- * Pre-processor Definitions
- ****************************************************************************/
-
-#define ARRAYSIZE(x) (sizeof((x)) / sizeof((x)[0]))
-
-/****************************************************************************
  * Private Data
  ****************************************************************************/
 
@@ -49,6 +45,8 @@
 
 static const uint32_t g_ledmap[BOARD_NLEDS] =
 {
+  GPIO_LED_GREEN,
+  GPIO_LED_BLUE,
   GPIO_LED_RED,
 };
 
@@ -62,7 +60,7 @@ static void phy_set_led(int led, bool state)
 {
   /* Active High */
 
-  /* stm32_gpiowrite(g_ledmap[led], state); */
+  stm32_gpiowrite(g_ledmap[led], state);
 }
 
 /****************************************************************************
@@ -79,9 +77,9 @@ void board_autoled_initialize(void)
 
   /* Configure the LD1 GPIO for output. Initial state is OFF */
 
-  for (i = 0; i < ARRAYSIZE(g_ledmap); i++)
+  for (i = 0; i < nitems(g_ledmap); i++)
     {
-      /* stm32_configgpio(g_ledmap[i]); */
+      stm32_configgpio(g_ledmap[i]);
     }
 }
 
@@ -91,47 +89,47 @@ void board_autoled_initialize(void)
 
 void board_autoled_on(int led)
 {
-  /* switch (led) */
-  /*   { */
-  /*   default: */
-  /*     break; */
+  switch (led)
+    {
+    default:
+      break;
 
-  /*   case LED_HEAPALLOCATE: */
-  /*     phy_set_led(BOARD_LED_BLUE, false); */
-  /*     break; */
+    case LED_HEAPALLOCATE:
+      phy_set_led(BOARD_LED_BLUE, true);
+      break;
 
-  /*   case LED_IRQSENABLED: */
-  /*     phy_set_led(BOARD_LED_BLUE, true); */
-  /*     phy_set_led(BOARD_LED_GREEN, false); */
-  /*     break; */
+    case LED_IRQSENABLED:
+      phy_set_led(BOARD_LED_BLUE, false);
+      phy_set_led(BOARD_LED_GREEN, true);
+      break;
 
-  /*   case LED_STACKCREATED: */
-  /*     phy_set_led(BOARD_LED_GREEN, false); */
-  /*     phy_set_led(BOARD_LED_BLUE, false); */
-  /*     g_initialized = true; */
-  /*     break; */
+    case LED_STACKCREATED:
+      phy_set_led(BOARD_LED_GREEN, true);
+      phy_set_led(BOARD_LED_BLUE, true);
+      g_initialized = true;
+      break;
 
-  /*   case LED_INIRQ: */
-  /*     phy_set_led(BOARD_LED_BLUE, false); */
-  /*     break; */
+    case LED_INIRQ:
+      phy_set_led(BOARD_LED_BLUE, true);
+      break;
 
-  /*   case LED_SIGNAL: */
-  /*     phy_set_led(BOARD_LED_GREEN, false); */
-  /*     break; */
+    case LED_SIGNAL:
+      phy_set_led(BOARD_LED_GREEN, true);
+      break;
 
-  /*   case LED_ASSERTION: */
-  /*     phy_set_led(BOARD_LED_RED, false); */
-  /*     phy_set_led(BOARD_LED_BLUE, false); */
-  /*     break; */
+    case LED_ASSERTION:
+      phy_set_led(BOARD_LED_RED, true);
+      phy_set_led(BOARD_LED_BLUE, true);
+      break;
 
-  /*   case LED_PANIC: */
-  /*     phy_set_led(BOARD_LED_RED, false); */
-  /*     break; */
+    case LED_PANIC:
+      phy_set_led(BOARD_LED_RED, true);
+      break;
 
-  /*   case LED_IDLE : /1* IDLE *1/ */
-  /*     phy_set_led(BOARD_LED_RED, false); */
-  /*   break; */
-  /*   } */
+    case LED_IDLE : /* IDLE */
+      phy_set_led(BOARD_LED_RED, true);
+    break;
+    }
 }
 
 /****************************************************************************
@@ -140,32 +138,32 @@ void board_autoled_on(int led)
 
 void board_autoled_off(int led)
 {
-  /* switch (led) */
-  /*   { */
-  /*   default: */
-  /*     break; */
+  switch (led)
+    {
+    default:
+      break;
 
-  /*   case LED_SIGNAL: */
-  /*     phy_set_led(BOARD_LED_GREEN, true); */
-  /*     break; */
+    case LED_SIGNAL:
+      phy_set_led(BOARD_LED_GREEN, false);
+      break;
 
-  /*   case LED_INIRQ: */
-  /*     phy_set_led(BOARD_LED_BLUE, true); */
-  /*     break; */
+    case LED_INIRQ:
+      phy_set_led(BOARD_LED_BLUE, false);
+      break;
 
-  /*   case LED_ASSERTION: */
-  /*     phy_set_led(BOARD_LED_RED, true); */
-  /*     phy_set_led(BOARD_LED_BLUE, true); */
-  /*     break; */
+    case LED_ASSERTION:
+      phy_set_led(BOARD_LED_RED, false);
+      phy_set_led(BOARD_LED_BLUE, false);
+      break;
 
-  /*   case LED_PANIC: */
-  /*     phy_set_led(BOARD_LED_RED, true); */
-  /*     break; */
+    case LED_PANIC:
+      phy_set_led(BOARD_LED_RED, false);
+      break;
 
-  /*   case LED_IDLE : /1* IDLE *1/ */
-  /*     phy_set_led(BOARD_LED_RED, true); */
-  /*   break; */
-  /*   } */
+    case LED_IDLE : /* IDLE */
+      phy_set_led(BOARD_LED_RED, false);
+    break;
+    }
 }
 
 #endif /* CONFIG_ARCH_LEDS */

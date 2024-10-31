@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/stm32h7/nucleo-h753zi/src/stm32_pwm.c
+ * boards/arm/stm32h7/nucleo-h753zi/src/stm32_romfs.h
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -18,91 +18,44 @@
  *
  ****************************************************************************/
 
+#ifndef __BOARDS_ARM_STM32H7_NUCLEO_H753ZI_SRC_STM32_ROMFS_H
+#define __BOARDS_ARM_STM32H7_NUCLEO_H753ZI_SRC_STM32_ROMFS_H
+
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
 #include <nuttx/config.h>
 
-#include <errno.h>
-#include <debug.h>
-
-#include <nuttx/timers/pwm.h>
-#include <arch/board/board.h>
-
-#include "chip.h"
-#include "arm_internal.h"
-#include "stm32_pwm.h"
-#include "nucleo-h753zi.h"
+#ifdef CONFIG_STM32_ROMFS
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
-/* Configuration ************************************************************/
-
-#define HAVE_PWM 1
-
-#ifndef CONFIG_PWM
-#  undef HAVE_PWM
-#endif
-
-#ifndef CONFIG_STM32H7_TIM1
-#  undef HAVE_PWM
-#endif
-
-#ifndef CONFIG_STM32H7_TIM1_PWM
-#  undef HAVE_PWM
-#endif
+#define ROMFS_SECTOR_SIZE 64
 
 /****************************************************************************
- * Public Functions
+ * Public Function Prototypes
  ****************************************************************************/
 
 /****************************************************************************
- * Name: stm32_pwm_setup
+ * Name: stm32_romfs_initialize
  *
  * Description:
- *   Initialize PWM and register the PWM device.
+ *   Registers built-in ROMFS image as block device and mounts it.
+ *
+ * Returned Value:
+ *   Zero (OK) on success, a negated errno value on error.
+ *
+ * Assumptions/Limitations:
+ *   Memory addresses [romfs_data_begin .. romfs_data_end) should contain
+ *   ROMFS volume data, as included in the assembly snippet above (l. 84).
  *
  ****************************************************************************/
 
-int stm32_pwm_setup(void)
-{
-#ifdef HAVE_PWM
-  static bool initialized = false;
-  struct pwm_lowerhalf_s *pwm;
-  int ret;
+int stm32_romfs_initialize(void);
 
-  /* Have we already initialized? */
+#endif /* CONFIG_STM32_ROMFS */
 
-  if (!initialized)
-    {
-      /* Get an instance of the PWM interface */
-
-      pwm = stm32_pwminitialize(NUCLEOH753ZI_PWMTIMER);
-      if (!pwm)
-        {
-          tmrerr("ERROR: Failed to get the STM32 PWM lower half\n");
-          return -ENODEV;
-        }
-
-      /* Register the PWM driver at "/dev/pwm0" */
-
-      ret = pwm_register("/dev/pwm0", pwm);
-      if (ret < 0)
-        {
-          tmrerr("ERROR: pwm_register failed: %d\n", ret);
-          return ret;
-        }
-
-      /* Now we are initialized */
-
-      initialized = true;
-    }
-
-  return OK;
-#else
-  return -ENODEV;
-#endif
-}
+#endif /* __BOARDS_ARM_STM32H7_NUCLEO_H753ZI_SRC_STM32_ROMFS_H */

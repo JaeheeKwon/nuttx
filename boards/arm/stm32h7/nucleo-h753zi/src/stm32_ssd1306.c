@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/stm32h7/nucleo-h753zi/src/stm32_dma_alloc.c
+ * boards/arm/stm32h7/nucleo-h753zi/src/stm32_ssd1306.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -23,83 +23,87 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
-#include <syslog.h>
-#include <stdint.h>
-#include <errno.h>
-#include <nuttx/mm/gran.h>
 
+#include <debug.h>
+
+#include <nuttx/board.h>
+#include <nuttx/lcd/lcd.h>
+#include <nuttx/lcd/ssd1306.h>
+#include <nuttx/i2c/i2c_master.h>
+
+#include "stm32.h"
 #include "nucleo-h753zi.h"
-
-#if defined(CONFIG_FAT_DMAMEMORY)
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
-#if !defined(CONFIG_GRAN)
-#  error microSD DMA support requires CONFIG_GRAN
-#endif
+/* Configuration ************************************************************/
 
-#define BOARD_DMA_ALLOC_POOL_SIZE (8*512)
+#ifndef CONFIG_LCD_MAXPOWER
+#  define CONFIG_LCD_MAXPOWER 1
+#endif
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-static GRAN_HANDLE dma_allocator;
-
-/* The DMA heap size constrains the total number of things that can be
- * ready to do DMA at a time.
- *
- * For example, FAT DMA depends on one sector-sized buffer per
- * filesystem plus one sector-sized buffer per file.
- *
- * We use a fundamental alignment / granule size of 64B; this is
- * sufficient to guarantee alignment for the largest STM32 DMA burst
- * (16 beats x 32bits).
- */
-
-static uint8_t g_dma_heap[BOARD_DMA_ALLOC_POOL_SIZE]
-                aligned_data(64);
+struct i2c_master_s *g_i2c;
+struct lcd_dev_s    *g_lcddev;
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: stm32_dma_alloc_init
- *
- * Description:
- *   All boards may optionally provide this API to instantiate a pool of
- *   memory for uses with FAST FS DMA operations.
- *
+ * Name: board_lcd_initialize
  ****************************************************************************/
 
-int stm32_dma_alloc_init(void)
+int board_lcd_initialize(void)
 {
-  dma_allocator = gran_initialize(g_dma_heap,
-                                  sizeof(g_dma_heap),
-                                  7,  /* 128B granule - must be > alignment (XXX bug?) */
-                                  6); /* 64B alignment */
+  /* Initialize I2C */
 
-  if (dma_allocator == NULL)
+  g_i2c = stm32_i2cbus_initialize(OLED_I2C_PORT);
+  if (!g_i2c)
     {
-      return -ENOMEM;
+      lcderr("ERROR: Failed to initialize I2C port %d\n", OLED_I2C_PORT);
+      return -ENODEV;
     }
 
   return OK;
 }
 
-/* DMA-aware allocator stubs for the FAT filesystem. */
+/****************************************************************************
+ * Name: board_lcd_getdev
+ ****************************************************************************/
 
-void *fat_dma_alloc(size_t size)
+struct lcd_dev_s *board_lcd_getdev(int devno)
 {
-  return gran_alloc(dma_allocator, size);
+  /* Bind the I2C port to the OLED */
+
+  g_lcddev = ssd1306_initialize(g_i2c, NULL, devno);
+  if (!g_lcddev)
+    {
+      lcderr("ERROR: Failed to bind I2C port 1 to OLED %d\n", devno);
+    }
+  else
+    {
+      lcdinfo("Bound I2C port %d to OLED %d\n", OLED_I2C_PORT, devno);
+
+      /* And turn the OLED on */
+
+      g_lcddev->setpower(g_lcddev, CONFIG_LCD_MAXPOWER);
+      return g_lcddev;
+    }
+
+  return NULL;
 }
 
-void fat_dma_free(void *memory, size_t size)
-{
-  gran_free(dma_allocator, memory, size);
-}
+/****************************************************************************
+ * Name: board_lcd_uninitialize
+ ****************************************************************************/
 
-#endif /* CONFIG_FAT_DMAMEMORY */
+void board_lcd_uninitialize(void)
+{
+  /* TO-FIX */
+}

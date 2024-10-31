@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/stm32h7/nucleo-h753zi/src/stm32_qencoder.c
+ * boards/arm/stm32h7/nucleo-h753zi/src/stm32_reset.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -24,43 +24,39 @@
 
 #include <nuttx/config.h>
 
-#include <errno.h>
-#include <debug.h>
-#include <stdio.h>
+#include <nuttx/arch.h>
+#include <nuttx/board.h>
 
-#include <nuttx/sensors/qencoder.h>
-#include <arch/board/board.h>
-
-#include "chip.h"
-#include "arm_internal.h"
-#include "stm32_qencoder.h"
+#ifdef CONFIG_BOARDCTL_RESET
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: board_qencoder_initialize
+ * Name: board_reset
  *
  * Description:
- *   Initialize the quadrature encoder driver for the given timer
+ *   Reset board.  Support for this function is required by board-level
+ *   logic if CONFIG_BOARDCTL_RESET is selected.
+ *
+ * Input Parameters:
+ *   status - Status information provided with the reset event.  This
+ *            meaning of this status information is board-specific.  If not
+ *            used by a board, the value zero may be provided in calls to
+ *            board_reset().
+ *
+ * Returned Value:
+ *   If this function returns, then it was not possible to power-off the
+ *   board due to some constraints.  The return value int this case is a
+ *   board-specific reason for the failure to shutdown.
  *
  ****************************************************************************/
 
-int board_qencoder_initialize(int devno, int timerno)
+int board_reset(int status)
 {
-  int ret;
-  char devpath[12];
-
-  /* Initialize a quadrature encoder interface. */
-
-  sninfo("Initializing the quadrature encoder using TIM%d\n", timerno);
-  snprintf(devpath, 12, "/dev/qe%d", devno);
-  ret = stm32_qeinitialize(devpath, timerno);
-  if (ret < 0)
-    {
-      snerr("ERROR: stm32_qeinitialize failed: %d\n", ret);
-    }
-
-  return ret;
+  up_systemreset();
+  return 0;
 }
+
+#endif /* CONFIG_BOARDCTL_RESET */

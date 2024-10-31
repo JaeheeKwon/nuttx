@@ -56,12 +56,12 @@
 #  undef HAVE_USB
 #endif
 
-#ifndef CONFIG_NUCLEO_H753ZI_USBHOST_PRIO
-#  define CONFIG_NUCLEO_H753ZI_USBHOST_PRIO 100
+#ifndef CONFIG_NUCLEOH753ZI_USBHOST_PRIO
+#  define CONFIG_NUCLEOH753ZI_USBHOST_PRIO 100
 #endif
 
-#ifndef CONFIG_NUCLEO_H753ZI_USBHOST_STACKSIZE
-#  define CONFIG_NUCLEO_H753ZI_USBHOST_STACKSIZE 1024
+#ifndef CONFIG_NUCLEOH753ZI_USBHOST_STACKSIZE
+#  define CONFIG_NUCLEOH753ZI_USBHOST_STACKSIZE 1024
 #endif
 
 /****************************************************************************
@@ -122,7 +122,7 @@ static int usbhost_waiter(int argc, char *argv[])
  *
  * Description:
  *   Called from stm32_usbinitialize very early in inialization to setup
- *   USB-related GPIO pins for the nucleo-h753zi board.
+ *   USB-related GPIO pins for the nucleo-144 board.
  *
  ****************************************************************************/
 
@@ -225,8 +225,8 @@ int stm32_usbhost_initialize(void)
 
       uinfo("Start usbhost_waiter\n");
 
-      ret = kthread_create("usbhost", CONFIG_NUCLEO_H753ZI_USBHOST_PRIO,
-                           CONFIG_NUCLEO_H753ZI_USBHOST_STACKSIZE,
+      ret = kthread_create("usbhost", CONFIG_NUCLEOH753ZI_USBHOST_PRIO,
+                           CONFIG_NUCLEOH753ZI_USBHOST_STACKSIZE,
                            usbhost_waiter, NULL);
       return ret < 0 ? -ENOEXEC : OK;
     }

@@ -36,18 +36,72 @@
 
 /* Configuration ************************************************************/
 
-/* LED of board */
+#define HAVE_PROC            1
+#define HAVE_USBDEV          1
+#define HAVE_USBHOST         1
+#define HAVE_USBMONITOR      1
+#define HAVE_MTDCONFIG       1
+#define HAVE_PROGMEM_CHARDEV 1
 
-#define GPIO_LD1       (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_50MHz | \
-                        GPIO_OUTPUT_SET|GPIO_PORTG|GPIO_PIN2)
-#define GPIO_LD2       (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_50MHz | \
-                        GPIO_OUTPUT_SET|GPIO_PORTG|GPIO_PIN3)
-#define GPIO_LD3       (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_50MHz | \
-                        GPIO_OUTPUT_SET|GPIO_PORTB|GPIO_PIN2)
+/* Can't support USB host or device features if USB OTG FS is not enabled */
 
-#define GPIO_LED_RED     GPIO_LD1
-#define GPIO_LED_GREEN   GPIO_LD2
-#define GPIO_LED_BLUE    GPIO_LD3
+#ifndef CONFIG_STM32H7_OTGFS
+#  undef HAVE_USBDEV
+#  undef HAVE_USBHOST
+#endif
+
+/* Can't support USB device if USB device is not enabled */
+
+#ifndef CONFIG_USBDEV
+#  undef HAVE_USBDEV
+#endif
+
+/* Can't support USB host is USB host is not enabled */
+
+#ifndef CONFIG_USBHOST
+#  undef HAVE_USBHOST
+#endif
+
+/* Check if we should enable the USB monitor before starting NSH */
+
+#ifndef CONFIG_USBMONITOR
+#  undef HAVE_USBMONITOR
+#endif
+
+#ifndef HAVE_USBDEV
+#  undef CONFIG_USBDEV_TRACE
+#endif
+
+#ifndef HAVE_USBHOST
+#  undef CONFIG_USBHOST_TRACE
+#endif
+
+#if !defined(CONFIG_USBDEV_TRACE) && !defined(CONFIG_USBHOST_TRACE)
+#  undef HAVE_USBMONITOR
+#endif
+
+#if !defined(CONFIG_STM32H7_PROGMEM) || !defined(CONFIG_MTD_PROGMEM)
+#  undef HAVE_PROGMEM_CHARDEV
+#endif
+
+/* This is the on-chip progmem memory driver minor number */
+
+#define PROGMEM_MTD_MINOR 0
+
+/* flash  */
+#if defined(CONFIG_MMCSD)
+#  define FLASH_BASED_PARAMS
+#endif
+
+/* procfs File System */
+
+#ifdef CONFIG_FS_PROCFS
+#  ifdef CONFIG_NSH_PROC_MOUNTPOINT
+#    define STM32_PROCFS_MOUNTPOINT CONFIG_NSH_PROC_MOUNTPOINT
+#  else
+#    define STM32_PROCFS_MOUNTPOINT "/proc"
+#  endif
+#endif
 
 /* Check if we can support the RTC driver */
 
@@ -56,75 +110,118 @@
 #  undef HAVE_RTC_DRIVER
 #endif
 
+/* LED
+ *
+ * The Nucleo-144 board has numerous LEDs but only three, LD1 a Green LED,
+ * LD2 a Blue LED and LD3 a Red LED, that can be controlled by software. The
+ * following definitions assume the default Solder Bridges are installed.
+ */
+
+#define GPIO_LD1       (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_50MHz | \
+                        GPIO_OUTPUT_CLEAR | GPIO_PORTB | GPIO_PIN0)
+#define GPIO_LD2       (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_50MHz | \
+                        GPIO_OUTPUT_CLEAR | GPIO_PORTB | GPIO_PIN7)
+#define GPIO_LD3       (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_50MHz | \
+                        GPIO_OUTPUT_CLEAR | GPIO_PORTB | GPIO_PIN14)
+
+#define GPIO_LED_GREEN GPIO_LD1
+#define GPIO_LED_BLUE  GPIO_LD2
+#define GPIO_LED_RED   GPIO_LD3
+
+#define LED_DRIVER_PATH "/dev/userleds"
+
+/* BUTTONS
+ *
+ * The Blue pushbutton B1, labeled "User", is connected to GPIO PC13.
+ * A high value will be sensed when the button is depressed.
+ * Note:
+ *    1) That the EXTI is included in the definition to enable an interrupt
+ *       on this IO.
+ *    2) The following definitions assume the default Solder Bridges are
+ *       installed.
+ */
+
+#define GPIO_BTN_USER  (GPIO_INPUT | GPIO_FLOAT | GPIO_EXTI | GPIO_PORTC | GPIO_PIN13)
+
 /* USB OTG FS
  *
- * PA9   OTG_FS_VBUS VBUS sensing
- * PI12  OTG_FS_PowerSwitchOn
- * PI13  OTG_FS_Overcurrent
+ * PA9  OTG_FS_VBUS VBUS sensing (also connected to the green LED)
+ * PG6  OTG_FS_PowerSwitchOn
+ * PG7  OTG_FS_Overcurrent
  */
 
 #define GPIO_OTGFS_VBUS   (GPIO_INPUT|GPIO_FLOAT|GPIO_SPEED_100MHz| \
                            GPIO_OPENDRAIN|GPIO_PORTA|GPIO_PIN9)
 
 #define GPIO_OTGFS_PWRON  (GPIO_OUTPUT|GPIO_FLOAT|GPIO_SPEED_100MHz|  \
-                           GPIO_PUSHPULL|GPIO_PORTI|GPIO_PIN12)
+                           GPIO_PUSHPULL|GPIO_PORTG|GPIO_PIN6)
 
 #ifdef CONFIG_USBHOST
 #  define GPIO_OTGFS_OVER (GPIO_INPUT|GPIO_EXTI|GPIO_FLOAT| \
                            GPIO_SPEED_100MHz|GPIO_PUSHPULL| \
-                           GPIO_PORTI|GPIO_PIN13)
+                           GPIO_PORTG|GPIO_PIN7)
 #else
 #  define GPIO_OTGFS_OVER (GPIO_INPUT|GPIO_FLOAT|GPIO_SPEED_100MHz| \
-                           GPIO_PUSHPULL|GPIO_PORTI|GPIO_PIN13)
+                           GPIO_PUSHPULL|GPIO_PORTG|GPIO_PIN7)
 #endif
 
-/* SD Card
- *
- * PG7  Card detected pin
- * PD7  Enable power supply SD Card pin
+/* GPIO pins used by the GPIO Subsystem */
+
+#define BOARD_NGPIOIN     1 /* Amount of GPIO Input pins */
+#define BOARD_NGPIOOUT    1 /* Amount of GPIO Output pins */
+#define BOARD_NGPIOINT    1 /* Amount of GPIO Input w/ Interruption pins */
+
+/* Example, used free Ports on the board */
+
+#define GPIO_IN1          (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTE | GPIO_PIN2)
+#define GPIO_OUT1         (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_50MHz | \
+                           GPIO_OUTPUT_SET | GPIO_PORTE | GPIO_PIN4)
+#define GPIO_INT1         (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTE | GPIO_PIN5)
+
+/* X-NUCLEO IKS01A2 */
+
+#define GPIO_LPS22HB_INT1 (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTB | GPIO_PIN10)
+#define GPIO_LSM6DSL_INT1 (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTB | GPIO_PIN4)
+#define GPIO_LSM6DSL_INT2 (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTB | GPIO_PIN5)
+
+/* NRF24L01
+ * CS  - PA4
+ * CE  - PF12 (D8)
+ * IRQ - PD15 (D9)
  */
 
-#if defined(CONFIG_STM32H7_SDMMC1)
-#  define HAVE_SDIO
-#endif
+#define GPIO_NRF24L01_CS   (GPIO_OUTPUT | GPIO_SPEED_50MHz| \
+                            GPIO_OUTPUT_SET | GPIO_PORTA | GPIO_PIN4)
+#define GPIO_NRF24L01_CE   (GPIO_OUTPUT | GPIO_SPEED_50MHz| \
+                            GPIO_OUTPUT_CLEAR | GPIO_PORTF | GPIO_PIN12)
+#define GPIO_NRF24L01_IRQ  (GPIO_INPUT | GPIO_FLOAT | GPIO_PORTD | GPIO_PIN15)
 
-#if defined(CONFIG_DISABLE_MOUNTPOINT) || !defined(CONFIG_MMCSD_SDIO)
-#  undef HAVE_SDIO
-#endif
+/* MMC/SD
+ * CS  - PD15 (D9)
+ * NCD - PF12 (D8)
+ */
 
-#define GPIO_SDIO_NCD     (GPIO_INPUT|GPIO_FLOAT|GPIO_EXTI|GPIO_PORTG|GPIO_PIN7) /* PG7 */
-#define GPIO_SD1_PWR_EN_N (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_50MHz| \
-                           GPIO_OUTPUT_SET|GPIO_PORTD|GPIO_PIN7)                 /* PD7 */
+#define GPIO_MMCSD_CS    (GPIO_OUTPUT | GPIO_PUSHPULL | GPIO_SPEED_50MHz | \
+                          GPIO_OUTPUT_SET | GPIO_PORTD | GPIO_PIN15)
+#define GPIO_MMCSD_NCD    (GPIO_INPUT | GPIO_PULLUP | GPIO_EXTI |  \
+                           GPIO_PORTF | GPIO_PIN12)
 
-#define SDIO_SLOTNO        0
-#define SDIO_MINOR         0
+/* LMS9DS1 configuration */
+
+#define LMS9DS1_I2CBUS 1
+
+/* PCA9635 configuration */
+
+#define PCA9635_I2CBUS  1
+#define PCA9635_I2CADDR 0x40
+
+/* Oled configuration */
+
+#define OLED_I2C_PORT   2
 
 /* PWM */
 
-#define BUZZER_PWMTIMER 4
-
-/* Ethernet
- *
- * PI4  Reset PHY pin
- */
-
-#define GPIO_ETH_RESET    (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_100MHz|\
-                           GPIO_OUTPUT_CLEAR|GPIO_PORTI|GPIO_PIN4)       /* PI4 */
-
-/* Quadrature Encoder
- *
- * Use Timer 5 (TIM3) on channels 2 and 2 for QEncoder, using PB4 and PA7.
- */
-
-#define NUCLEOSTM32H753ZI_QETIMER 5
-
-/* LCD */
-
-#define GPIO_LCD_DISP      (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_50MHz|\
-                            GPIO_OUTPUT_SET|GPIO_PORTI|GPIO_PIN7)
-
-#define GPIO_LCD_BL        (GPIO_OUTPUT|GPIO_PUSHPULL|GPIO_SPEED_50MHz|\
-                            GPIO_OUTPUT_SET|GPIO_PORTH|GPIO_PIN6)
+#define NUCLEOH753ZI_PWMTIMER 1
 
 /****************************************************************************
  * Public Function Prototypes
@@ -148,6 +245,43 @@
 int stm32_bringup(void);
 
 /****************************************************************************
+ * Name: stm32_spidev_initialize
+ *
+ * Description:
+ *   Called to configure SPI chip select GPIO pins for the
+ *   Nucleo-H753ZI board.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_STM32H7_SPI
+void stm32_spidev_initialize(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_adc_setup
+ *
+ * Description:
+ *   Initialize ADC and register the ADC driver.
+ *
+ ****************************************************************************/
+
+#ifdef CONFIG_ADC
+int stm32_adc_setup(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_gpio_initialize
+ *
+ * Description:
+ *   Initialize GPIO-Driver.
+ *
+ ****************************************************************************/
+
+#if defined(CONFIG_DEV_GPIO) && !defined(CONFIG_GPIO_LOWER_HALF)
+int stm32_gpio_initialize(void);
+#endif
+
+/****************************************************************************
  * Name: stm32_usbinitialize
  *
  * Description:
@@ -161,42 +295,74 @@ void weak_function stm32_usbinitialize(void);
 #endif
 
 /****************************************************************************
- * Name: stm32_dma_alloc_init
+ * Name: stm32_usbhost_initialize
  *
  * Description:
- *   Called to create a FAT DMA allocator.
- *
- * Returned Value:
- *   0 on success or -ENOMEM
+ *   Called at application startup time to initialize the USB host
+ *   functionality. This function will start a thread that will monitor for
+ *   device connection/disconnection events.
  *
  ****************************************************************************/
 
-#if defined (CONFIG_FAT_DMAMEMORY)
-int stm32_dma_alloc_init(void);
+#if defined(CONFIG_STM32H7_OTGFS) && defined(CONFIG_USBHOST)
+int stm32_usbhost_initialize(void);
 #endif
 
 /****************************************************************************
- * Name: stm32_sdio_initialize
+ * Name: stm32_lsm6dsl_initialize
  *
  * Description:
- *   Initialize SDIO-based MMC/SD card support.
+ *   Initialize I2C-based LSM6DSL.
  *
  ****************************************************************************/
 
-#ifdef HAVE_SDIO
-int stm32_sdio_initialize(void);
+#ifdef CONFIG_SENSORS_LSM303AGR
+int stm32_lsm6dsl_initialize(char *devpath);
 #endif
 
 /****************************************************************************
- * Name: stm32_at24_init
+ * Name: stm32_lsm303agr_initialize
  *
  * Description:
- *   Initialize and register the EEPROM for 24XX driver.
+ *   Initialize I2C-based LSM303AGR.
  *
  ****************************************************************************/
 
-#ifdef CONFIG_I2C_EE_24XX
-int stm32_at24_init(char *path);
+#ifdef CONFIG_SENSORS_LSM6DSL
+int stm32_lsm303agr_initialize(char *devpath);
+#endif
+
+/****************************************************************************
+ * Name: stm32_wlinitialize
+ *
+ * Description:
+ *   Initialize NRF24L01 wireless interaface.
+ ****************************************************************************/
+
+#ifdef CONFIG_WL_NRF24L01
+int stm32_wlinitialize(void);
+#endif
+
+/****************************************************************************
+ * Name: stm32_lsm9ds1_initialize
+ *
+ * Description:
+ *   Initialize I2C-based LSM9DS1.
+ ****************************************************************************/
+
+#ifdef CONFIG_SENSORS_LSM9DS1
+int stm32_lsm9ds1_initialize(char *devpath);
+#endif
+
+/****************************************************************************
+ * Name: stm32_pca9635_initialize
+ *
+ * Description:
+ *   Initialize I2C-based PCA9635PW LED driver.
+ ****************************************************************************/
+
+#ifdef CONFIG_PCA9635PW
+int stm32_pca9635_initialize(void);
 #endif
 
 /****************************************************************************
@@ -212,55 +378,29 @@ int stm32_pwm_setup(void);
 #endif
 
 /****************************************************************************
- * Name: stm32_spidev_initialize
+ * Name: stm32_mtd_initialize
  *
  * Description:
- *   Called to configure SPI chip select GPIO pins.
+ *   Initialize MTD drivers.
  *
  ****************************************************************************/
+#ifdef CONFIG_MTD
 
-#ifdef CONFIG_STM32H7_SPI
-void stm32_spidev_initialize(void);
+#ifdef HAVE_PROGMEM_CHARDEV
+int stm32_progmem_init(void);
+#endif /* HAVE_PROGMEM_CHARDEV */
 #endif
 
 /****************************************************************************
- * Name: stm32_n25qxxx_setup
+ * Name: stm32_mmcsd_initialize
  *
  * Description:
- *   Initialize and register the FLash for N25QXXX driver.
+ *   Initialize SPI-based SD card and card detect thread.
  *
  ****************************************************************************/
 
-#ifdef CONFIG_MTD_W25QXXXJV
-int stm32_w25qxxx_setup(void);
-#endif
-
-/****************************************************************************
- * Name: board_qencoder_initialize
- *
- * Description:
- *   Initialize the quadrature encoder driver for the given timer
- *
- ****************************************************************************/
-
-int board_qencoder_initialize(int devno, int timerno);
-
-/****************************************************************************
- * Name: stm32_mfrc522initialize
- *
- * Description:
- *   Initialize and register the MFRC522 RFID driver.
- *
- * Input Parameters:
- *   devpath - The full path to the driver to register. E.g., "/dev/rfid0"
- *
- * Returned Value:
- *   Zero (OK) on success; a negated errno value on failure.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_CL_MFRC522
-int stm32_mfrc522initialize(const char *devpath);
+#ifdef CONFIG_MMCSD_SPI
+int stm32_mmcsd_initialize(int minor);
 #endif
 
 #endif /* __BOARDS_ARM_STM32H7_NUCLEO_H753ZI_SRC_NUCLEO_H753ZI_H */

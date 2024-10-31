@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/stm32h7/nucleo-h753zi/src/stm32_userleds.c
+ * boards/arm/stm32h7/nucleo-h753zi/src/stm32_nrf24l01.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -24,102 +24,98 @@
 
 #include <nuttx/config.h>
 
+#include <stdint.h>
 #include <stdbool.h>
 #include <debug.h>
+#include <errno.h>
 
-#include <sys/param.h>
-
-#include <nuttx/board.h>
+#include <nuttx/spi/spi.h>
+#include <nuttx/wireless/nrf24l01.h>
 #include <arch/board/board.h>
 
-#include "stm32_gpio.h"
+#include "arm_internal.h"
+#include "chip.h"
+#include "stm32.h"
 #include "nucleo-h753zi.h"
 
-#ifndef CONFIG_ARCH_LEDS
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#define NRF24L01_SPI 3
+
+/****************************************************************************
+ * Private Function Prototypes
+ ****************************************************************************/
+
+static int nrf24l01_irq_attach(xcpt_t isr, void *arg);
+static void nrf24l01_chip_enable(bool enable);
 
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
-/* This array maps an LED number to GPIO pin configuration and is indexed by
- * BOARD_LED_<color>
- */
-
-static const uint32_t g_ledcfg[BOARD_NLEDS] =
+static struct nrf24l01_config_s nrf_cfg =
 {
-  GPIO_LED_GREEN,
-  GPIO_LED_BLUE,
-  GPIO_LED_RED,
+  .irqattach = nrf24l01_irq_attach,
+  .chipenable = nrf24l01_chip_enable,
 };
+
+static xcpt_t g_isr;
+static void *g_arg;
+
+/****************************************************************************
+ * Private Functions
+ ****************************************************************************/
+
+static int nrf24l01_irq_attach(xcpt_t isr, void *arg)
+{
+  wlinfo("Attach IRQ\n");
+  g_isr = isr;
+  g_arg = arg;
+  stm32_gpiosetevent(GPIO_NRF24L01_IRQ, false, true, false, g_isr, g_arg);
+  return OK;
+}
+
+static void nrf24l01_chip_enable(bool enable)
+{
+  wlinfo("CE:%d\n", enable);
+  stm32_gpiowrite(GPIO_NRF24L01_CE, enable);
+}
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
-/****************************************************************************
- * Name: board_userled_initialize
- *
- * Description:
- *   If CONFIG_ARCH_LEDS is defined, then NuttX will control the on-board
- *   LEDs.  If CONFIG_ARCH_LEDS is not defined, then the
- *   board_userled_initialize() is available to initialize the LED from user
- *   application logic.
- *
- ****************************************************************************/
-
-uint32_t board_userled_initialize(void)
+int stm32_wlinitialize(void)
 {
-  int i;
+  struct spi_dev_s *spidev;
+  int ret = OK;
 
-  /* Configure LED1-3 GPIOs for output */
+  syslog(LOG_INFO, "Register the nRF24L01 module\n");
 
-  for (i = 0; i < nitems(g_ledcfg); i++)
+  /* Setup CE & IRQ line IOs */
+
+  stm32_configgpio(GPIO_NRF24L01_CE);
+  stm32_configgpio(GPIO_NRF24L01_IRQ);
+
+  /* Init SPI bus */
+
+  spidev = stm32_spibus_initialize(NRF24L01_SPI);
+  if (!spidev)
     {
-      stm32_configgpio(g_ledcfg[i]);
+      wlerr("ERROR: Failed to initialize SPI %d bus\n", NRF24L01_SPI);
+      ret = -ENODEV;
+      goto errout;
     }
 
-  return BOARD_NLEDS;
-}
-
-/****************************************************************************
- * Name: board_userled
- *
- * Description:
- *   If CONFIG_ARCH_LEDS is defined, then NuttX will control the on-board
- *  LEDs.  If CONFIG_ARCH_LEDS is not defined, then the board_userled() is
- *  available to control the LED from user application logic.
- *
- ****************************************************************************/
-
-void board_userled(int led, bool ledon)
-{
-  if ((unsigned)led < nitems(g_ledcfg))
+  ret = nrf24l01_register(spidev, &nrf_cfg);
+  if (ret != OK)
     {
-      stm32_gpiowrite(g_ledcfg[led], ledon);
+      wlerr("ERROR: Failed to register initialize SPI bus\n");
+      goto errout;
     }
+
+errout:
+  return ret;
 }
-
-/****************************************************************************
- * Name: board_userled_all
- *
- * Description:
- *   If CONFIG_ARCH_LEDS is defined, then NuttX will control the on-board
- *  LEDs.  If CONFIG_ARCH_LEDS is not defined, then the board_userled_all()
- *  is available to control the LED from user application logic. NOTE: since
- *  there is only a single LED on-board, this is function is not very useful.
- *
- ****************************************************************************/
-
-void board_userled_all(uint32_t ledset)
-{
-  int i;
-
-  /* Configure LED1-3 GPIOs for output */
-
-  for (i = 0; i < nitems(g_ledcfg); i++)
-    {
-      stm32_gpiowrite(g_ledcfg[i], (ledset & (1 << i)) != 0);
-    }
-}
-
-#endif /* !CONFIG_ARCH_LEDS */

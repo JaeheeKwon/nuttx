@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/stm32h7/nucleo-h753zi/src/stm32_boot.c
+ * boards/arm/stm32h7/nucleo-h753zi/src/stm32_pca9635.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -24,13 +24,17 @@
 
 #include <nuttx/config.h>
 
+#include <stdbool.h>
+#include <stdio.h>
 #include <debug.h>
+#include <errno.h>
 
-#include <nuttx/board.h>
-#include <arch/board/board.h>
+#include <nuttx/i2c/i2c_master.h>
+#include <nuttx/leds/pca9635pw.h>
 
-#include "arm_internal.h"
-#include "stm32_start.h"
+#include <arch/irq.h>
+
+#include "stm32.h"
 #include "nucleo-h753zi.h"
 
 /****************************************************************************
@@ -38,54 +42,41 @@
  ****************************************************************************/
 
 /****************************************************************************
- * Name: stm32_boardinitialize
+ * Name: stm32_pca9635_initialize
  *
  * Description:
- *   All STM32 architectures must provide the following entry point.
- *   This entry point is called early in the initialization -- after all
- *   memory has been configured and mapped but before any devices have been
- *   initialized.
+ *   This function is called by board initialization logic to configure the
+ *   LED PWM chip.  This function will register the driver as /dev/leddrv0.
+ *
+ * Input Parameters:
+ *   None
+ *
+ * Returned Value:
+ *   Zero is returned on success.  Otherwise, a negated errno value is
+ *   returned to indicate the nature of the failure.
  *
  ****************************************************************************/
 
-void stm32_boardinitialize(void)
+int stm32_pca9635_initialize(void)
 {
-#ifdef CONFIG_ARCH_LEDS
-  /* Configure on-board LEDs if LED support has been selected. */
+  struct i2c_master_s *i2c;
+  int ret;
 
-  board_autoled_initialize();
-#endif
+  /* Get the I2C driver that interfaces with the pca9635 */
 
-#if defined(CONFIG_STM32H7_OTGFS) || defined(CONFIG_STM32H7_HOST)
-  /* Initialize USB */
+  i2c = stm32_i2cbus_initialize(PCA9635_I2CBUS);
+  if (!i2c)
+    {
+      i2cerr("ERROR: Failed to initialize I2C%d\n", PCA9635_I2CBUS);
+      return -1;
+    }
 
-  stm32_usbinitialize();
-#endif
+  ret = pca9635pw_register("/dev/leddrv0", i2c, PCA9635_I2CADDR);
+  if (ret < 0)
+    {
+      snerr("ERROR: Failed to register PCA9635 driver: %d\n", ret);
+      return ret;
+    }
 
-#ifdef CONFIG_STM32H7_SPI
-  /* Configure SPI chip selects */
-
-  stm32_spidev_initialize();
-#endif
+  return OK;
 }
-
-/****************************************************************************
- * Name: board_late_initialize
- *
- * Description:
- *   If CONFIG_BOARD_LATE_INITIALIZE is selected, then an additional
- *   initialization call will be performed in the boot-up sequence to a
- *   function called board_late_initialize().  board_late_initialize()
- *   will be called immediately after up_initialize() is called and just
- *   before the initial application is started.  This additional
- *   initialization phase may be used, for example, to initialize board-
- *   specific device drivers.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_BOARD_LATE_INITIALIZE
-void board_late_initialize(void)
-{
-  stm32_bringup();
-}
-#endif

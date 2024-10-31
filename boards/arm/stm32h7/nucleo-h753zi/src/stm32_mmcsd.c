@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/stm32h7/nucleo-h753zi/src/stm32_mfrc522.c
+ * boards/arm/stm32h7/nucleo-h753zi/src/stm32_mmcsd.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -24,61 +24,65 @@
 
 #include <nuttx/config.h>
 
-#include <errno.h>
 #include <debug.h>
-
-#include <nuttx/board.h>
+#include <nuttx/mmcsd.h>
 #include <nuttx/spi/spi.h>
-#include <nuttx/contactless/mfrc522.h>
 
-#include "nucleo-h753zi.h"
+#include <arch/board/board.h>
+
 #include "stm32_spi.h"
 
-#if defined(CONFIG_SPI) && defined(CONFIG_STM32H7_SPI4) && defined(CONFIG_CL_MFRC522)
+#include "nucleo-h753zi.h"
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define MFRC522_SPI_PORTNO 4   /* On SPI4 */
+#ifdef CONFIG_DISABLE_MOUNTPOINT
+#  error "SD driver requires CONFIG_DISABLE_MOUNTPOINT to be disabled"
+#endif
+
+#ifndef CONFIG_STM32H7_SPI3
+#  error "MMC/SD requires SPI3 enabled"
+#endif
+
+#define MMCSD_SPI_PORT (3)
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: stm32_mfrc522initialize
+ * Name: stm32_mmcsd_initialize
  *
  * Description:
- *   Initialize and register the MFRC522 RFID driver.
- *
- * Input Parameters:
- *   devpath - The full path to the driver to register. E.g., "/dev/rfid0"
- *
- * Returned Value:
- *   Zero (OK) on success; a negated errno value on failure.
+ *   Initialize SPI-based SD card and card detect thread.
  *
  ****************************************************************************/
 
-int stm32_mfrc522initialize(const char *devpath)
+int stm32_mmcsd_initialize(int minor)
 {
   struct spi_dev_s *spi;
   int ret;
-  spi = stm32_spibus_initialize(MFRC522_SPI_PORTNO);
-  if (!spi)
+
+  mcinfo("INFO: Initializing mmcsd port %d minor %d\n",
+         MMCSD_SPI_PORT, minor);
+
+  spi = stm32_spibus_initialize(MMCSD_SPI_PORT);
+  if (spi == NULL)
     {
+      mcerr("ERROR: Failed to initialize SPI port %d\n", MMCSD_SPI_PORT);
       return -ENODEV;
     }
 
-  /* Then register the MFRC522 */
-
-  ret = mfrc522_register(devpath, spi);
+  ret = mmcsd_spislotinitialize(minor, 0, spi);
   if (ret < 0)
     {
-      snerr("ERROR: Error registering MFRC522\n");
+      mcerr("ERROR: Failed to bind SPI port %d to SD slot %d\n",
+            MMCSD_SPI_PORT, minor);
+      return ret;
     }
 
-  return ret;
+  mcinfo("INFO: mmcsd card has been initialized successfully\n");
+  return OK;
 }
-
-#endif /* CONFIG_SPI && CONFIG_STM32H7_SPI4 && CONFIG_MFRC522 */

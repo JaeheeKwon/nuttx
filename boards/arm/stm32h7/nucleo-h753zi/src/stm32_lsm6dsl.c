@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/stm32h7/nucleo-h753zi/src/stm32_boot.c
+ * boards/arm/stm32h7/nucleo-h753zi/src/stm32_lsm6dsl.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -23,69 +23,67 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/arch.h>
 
+#include <errno.h>
 #include <debug.h>
 
 #include <nuttx/board.h>
-#include <arch/board/board.h>
+#include "stm32.h"
+#include <nucleo-h753zi.h>
+#include <nuttx/sensors/lsm6dsl.h>
 
-#include "arm_internal.h"
-#include "stm32_start.h"
-#include "nucleo-h753zi.h"
+/****************************************************************************
+ * Pre-processor Definitions
+ ****************************************************************************/
+
+#ifndef CONFIG_STM32H7_I2C1
+#  error "LSM6DSL driver requires CONFIG_STM32H7_I2C1 to be enabled"
+#endif
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: stm32_boardinitialize
+ * Name: stm32_lsm6dsl_initialize
  *
  * Description:
- *   All STM32 architectures must provide the following entry point.
- *   This entry point is called early in the initialization -- after all
- *   memory has been configured and mapped but before any devices have been
- *   initialized.
+ *   Initialize I2C-based LSM6DSL.
  *
  ****************************************************************************/
 
-void stm32_boardinitialize(void)
+int stm32_lsm6dsl_initialize(char *devpath)
 {
-#ifdef CONFIG_ARCH_LEDS
-  /* Configure on-board LEDs if LED support has been selected. */
+  struct i2c_master_s *i2c;
+  int ret = OK;
 
-  board_autoled_initialize();
+  sninfo("Initializing LMS6DSL!\n");
+
+  /* Configure the GPIO interrupt */
+
+  stm32_configgpio(GPIO_LPS22HB_INT1);
+
+#if defined(CONFIG_STM32H7_I2C1)
+  i2c = stm32_i2cbus_initialize(1);
+  if (i2c == NULL)
+    {
+      return -ENODEV;
+    }
+
+  sninfo("INFO: Initializing LMS6DSL accelero-gyro sensor over I2C%d\n",
+         ret);
+
+  ret = lsm6dsl_sensor_register(devpath, i2c, LSM6DSLACCEL_ADDR1);
+  if (ret < 0)
+    {
+      snerr("ERROR: Failed to initialize LMS6DSL accelero-gyro driver %s\n",
+            devpath);
+      return -ENODEV;
+    }
+
+  sninfo("INFO: LMS6DSL sensor has been initialized successfully\n");
 #endif
 
-#if defined(CONFIG_STM32H7_OTGFS) || defined(CONFIG_STM32H7_HOST)
-  /* Initialize USB */
-
-  stm32_usbinitialize();
-#endif
-
-#ifdef CONFIG_STM32H7_SPI
-  /* Configure SPI chip selects */
-
-  stm32_spidev_initialize();
-#endif
+  return ret;
 }
-
-/****************************************************************************
- * Name: board_late_initialize
- *
- * Description:
- *   If CONFIG_BOARD_LATE_INITIALIZE is selected, then an additional
- *   initialization call will be performed in the boot-up sequence to a
- *   function called board_late_initialize().  board_late_initialize()
- *   will be called immediately after up_initialize() is called and just
- *   before the initial application is started.  This additional
- *   initialization phase may be used, for example, to initialize board-
- *   specific device drivers.
- *
- ****************************************************************************/
-
-#ifdef CONFIG_BOARD_LATE_INITIALIZE
-void board_late_initialize(void)
-{
-  stm32_bringup();
-}
-#endif

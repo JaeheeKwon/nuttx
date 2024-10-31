@@ -1,5 +1,5 @@
 /****************************************************************************
- * boards/arm/stm32h7/nucleo-h753zi/src/stm32_at24.c
+ * boards/arm/stm32h7/nucleo-h753zi/src/stm32_lsm9ds1.c
  *
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -23,74 +23,83 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/arch.h>
 
-#include <sys/mount.h>
-
-#include <stdbool.h>
-#include <stdio.h>
 #include <errno.h>
 #include <debug.h>
 
-#include <nuttx/i2c/i2c_master.h>
-#include <nuttx/eeprom/i2c_xx24xx.h>
-#include "stm32_i2c.h"
-
-#include "nucleo-h753zi.h"
+#include <nuttx/board.h>
+#include "stm32.h"
+#include <nucleo-h753zi.h>
+#include <nuttx/sensors/lsm9ds1.h>
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define AT24_I2C_BUS     3  /* EEPROM chip is configured to use I2C3 */
+#ifndef CONFIG_STM32H7_I2C1
+#  error "LSM9DS1 driver requires CONFIG_STM32H7_I2C1 to be enabled"
+#endif
+
+#define LSM9DS1MAG_DEVPATH "/dev/lsm9ds1mag0"
+#define LSM9DS1ACC_DEVPATH "/dev/lsm9ds1acc0"
+#define LSM9DS1GYR_DEVPATH "/dev/lsm9ds1gyr0"
 
 /****************************************************************************
  * Public Functions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: stm32_at24_init
+ * Name: stm32_lsm9ds1_initialize
  *
  * Description:
- *   Initialize and configure the AT24 serial EEPROM
+ *   Initialize I2C-based LSM9DS1.
  *
  ****************************************************************************/
 
-int stm32_at24_init(char *path)
+int stm32_lsm9ds1_initialize(void)
 {
   struct i2c_master_s *i2c;
-  static bool initialized = false;
-  int ret;
+  int ret = OK;
 
-  /* Have we already initialized? */
+  sninfo("Initializing LMS9DS1!\n");
 
-  if (!initialized)
+#if defined(CONFIG_STM32H7_I2C1)
+  i2c = stm32_i2cbus_initialize(LMS9DS1_I2CBUS);
+  if (i2c == NULL)
     {
-      /* No.. Get the I2C bus driver */
-
-      finfo("Initialize I2C%d\n", AT24_I2C_BUS);
-      i2c = stm32_i2cbus_initialize(AT24_I2C_BUS);
-      if (!i2c)
-        {
-          ferr("ERROR: Failed to initialize I2C%d\n", AT24_I2C_BUS);
-          return -ENODEV;
-        }
-
-      /* Now bind the I2C interface to the AT24 I2C EEPROM driver */
-
-      finfo("Bind the AT24 EEPROM driver to I2C%d\n", AT24_I2C_BUS);
-      ret = ee24xx_initialize(i2c, 0x54, path, EEPROM_24XX256, false);
-      if (ret < 0)
-        {
-          ferr("ERROR: Failed to bind I2C%d to the AT24 EEPROM driver\n",
-               AT24_I2C_BUS);
-          return -ENODEV;
-        }
-
-      /* Now we are initialized */
-
-      initialized = true;
+      return -ENODEV;
     }
 
-  return OK;
-}
+  sninfo("INFO: Initializing LMS9DS1 9DoF sensor over I2C%d\n",
+         LMS9DS1_I2CBUS);
 
+  ret = lsm9ds1mag_register(LSM9DS1MAG_DEVPATH, i2c, LSM9DS1MAG_ADDR1);
+  if (ret < 0)
+    {
+      snerr("ERROR: Failed to initialize LMS9DS1 mag driver %s\n",
+            LSM9DS1MAG_DEVPATH);
+      return -ENODEV;
+    }
+
+  ret = lsm9ds1gyro_register(LSM9DS1GYR_DEVPATH, i2c, LSM9DS1GYRO_ADDR1);
+  if (ret < 0)
+    {
+      snerr("ERROR: Failed to initialize LMS9DS1 gyro driver %s\n",
+            LSM9DS1MAG_DEVPATH);
+      return -ENODEV;
+    }
+
+  ret = lsm9ds1accel_register(LSM9DS1ACC_DEVPATH, i2c, LSM9DS1ACCEL_ADDR1);
+  if (ret < 0)
+    {
+      snerr("ERROR: Failed to initialize LMS9DS1 accel driver %s\n",
+            LSM9DS1MAG_DEVPATH);
+      return -ENODEV;
+    }
+
+  sninfo("INFO: LMS9DS1 sensor has been initialized successfully\n");
+#endif
+
+  return ret;
+}
